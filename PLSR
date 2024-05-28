@@ -1,0 +1,279 @@
+#This code will take the soil specral data and split test tran data, Plot the spectral data and Run PLSR model by selecting best n component
+
+
+"""
+
+#Import necessary libraries
+import warnings
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import sklearn
+from sklearn.preprocessing import scale 
+from sklearn import model_selection
+from sklearn.model_selection import RepeatedKFold
+from sklearn.model_selection import train_test_split, cross_val_predict, KFold 
+from sklearn.cross_decomposition import PLSRegression
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+
+
+
+
+#c soil
+#file_path = r"C:\Users\Fresh_soil_merged.csv"
+
+file_path = r"C:\Users02T.csv"
+
+
+df = pd.read_csv(file_path)
+
+
+#df = df.drop([131,132,67,])
+#df = df.drop([30])
+df = df.iloc[:, :]#all
+
+#df = df.iloc[98:170]#SP
+
+#df = df.iloc[:50]#HN
+#df = df.iloc[50:98]#RF
+
+# Reset the index to make it continuous
+df.reset_index(drop=True, inplace=True)
+
+print(df.head())
+      
+#X = df.iloc[:, 1130:1658]  # Features: column 5 to 1758 (skip the first column 'smp_id')###ATR
+#X = df.iloc[:, 1230:1357]  # Features: column 5 to 1758 (skip the first column 'smp_id')###ATR
+#X = df.iloc[:, 1130:1014]  # Features: column 5 to 1758 (skip the first column 'smp_id')###ATR
+#X = df.iloc[:, 904:]  # Features: column 5 to 1758 (skip the first column 'smp_id')###ASD
+#X = df.iloc[:, 1242:1316]# Wave1300-1450 
+X = df.iloc[:, 1250:1570]  #Wave 600-2000 
+#X = df.iloc[:, 975:1657]  #Wave 600-2000
+#X = df.iloc[:, 2:]  # Features: column 5 to 1758 (skip the first column 'smp_id')
+y = df[['Nitrate' ]]  # Target variable(s)
+df.reset_index(drop=True, inplace=True)
+X.shape
+y.shape
+
+
+
+################# Plotting############################
+
+# Define the wavelengths array based on the number of columns in X
+# Determine the number of columns in X
+num_columns = X.shape[1]
+
+# Define the starting and ending wavelengths based on your data
+#start_wavelength =600
+#end_wavelength =2000
+
+start_wavelength =600
+end_wavelength =1200
+
+#start_wavelength =1301.37
+#end_wavelength =1451.21
+
+# Calculate the step size
+step_size = (end_wavelength - start_wavelength) / num_columns
+
+# Create the wavelengths array
+wavelengths = np.arange(end_wavelength, start_wavelength, -step_size)
+
+plt.figure(figsize=(12, 5))
+
+for i in range(len(X)):
+    spectrum = X.iloc[i].values
+    plt.plot(wavelengths, spectrum, linewidth=0.8, label=f'Spectrum {i+1}')
+
+# Increase font size for title, x-axis label, and y-axis label
+plt.xlabel('Wavenumber, cm\u207B\u00B9', fontsize=16)
+plt.ylabel('Absorbance units', fontsize=16)
+plt.title(' ATR data  ', fontsize=16)
+
+plt.grid(False, axis='y')
+
+# Automatically set x-axis limits based on the range of wavelengths
+plt.xlim(np.min(wavelengths), np.max(wavelengths))
+
+# Increase font size for tick labels
+plt.xticks(fontsize=12)
+plt.yticks(fontsize=12)
+
+plt.tight_layout()  # Adjust layout to prevent clipping of labels
+plt.show()
+
+
+
+
+
+# Plot histogram of nitrate content
+plt.hist(y, bins=20, edgecolor='black')
+plt.xlabel('Nitrate content (ppm)', fontsize=14)
+plt.ylabel('Frequency', fontsize=14)
+plt.title('Histogram of Nitrate Values (Rogers farm (ATR) data)', fontsize=16)
+plt.grid(False)
+plt.show()
+
+
+#######################Filter##########################
+# Convert the DataFrame to a numpy array
+X = X.values
+y = y.values
+# Log-transform the data
+#X = np.log(X)
+
+
+# Apply Savitzky-Golay filter for smoothing
+from scipy.signal import savgol_filter
+#X = savgol_filter(X, window_length=11, polyorder=2, deriv=1)
+
+# Apply spectral correction transformer (SNV)
+from pyspectra.transformers.spectral_correction import snv
+#X = snv().fit_transform(X)
+
+# 1. Min-Max Scaling (Normalization)
+scaler_minmax = MinMaxScaler()
+#X = scaler_minmax.fit_transform(X)
+#y = scaler_minmax.fit_transform(y)
+
+
+
+# 2. Standardization (Z-score Scaling)
+scaler_standard = StandardScaler()
+#X = scaler_standard.fit_transform(X)
+#y= scaler_standard.fit_transform(y)
+
+###################### PLSR Model###################
+
+import numpy as np
+from sklearn.model_selection import train_test_split, cross_val_predict, KFold
+from sklearn.metrics import r2_score, mean_squared_error
+from sklearn.cross_decomposition import PLSRegression
+
+
+# Split the dataset into training and testing sets (70% train, 30% test)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=50)#
+
+# Define the range of components and folds you want to try
+components_range = range(1, 20)  # You can adjust this range
+folds_range = range(2, 11)       # You can adjust this range
+
+best_r2 = -np.inf
+best_n_components = None
+best_n_folds = None
+
+# =============================================================================
+# for n_components in components_range:
+#     for n_folds in folds_range:
+#         pls = PLSRegression(n_components=n_components)
+#         kf = KFold(n_splits=n_folds)
+# 
+#         r2_scores = []
+#         for train_index, val_index in kf.split(X_train):
+#             X_train_fold, X_val_fold = X_train[train_index], X_train[val_index]
+#             y_train_fold, y_val_fold = y_train[train_index], y_train[val_index]
+# 
+#             pls.fit(X_train_fold, y_train_fold)
+#             y_val_pred = pls.predict(X_val_fold)
+# 
+#             r2_scores.append(r2_score(y_val_fold, y_val_pred))
+# 
+#         avg_r2 = np.mean(r2_scores)
+#         if avg_r2 > best_r2:
+#             best_r2 = avg_r2
+#             best_n_components = n_components
+#             best_n_folds = n_folds
+#             print(f"d: {r2:.4f}")
+# 
+# 
+# =============================================================================
+################
+
+for n_components in components_range:
+    for n_folds in folds_range:
+        pls = PLSRegression(n_components=n_components)
+        kf = KFold(n_splits=n_folds)
+
+        for train_index, val_index in kf.split(X_train):
+            X_train_fold, X_val_fold = X_train[train_index], X_train[val_index]
+            y_train_fold, y_val_fold = y_train[train_index], y_train[val_index]
+
+            pls.fit(X_train_fold, y_train_fold)
+            y_val_pred = pls.predict(X_val_fold)
+
+            avg_r2 = np.mean(r2_score(y_val_fold, y_val_pred))# 
+            print(f"Best n_components: {n_components}, Best n_folds: {n_folds}, Best R-squared: {avg_r2:.4f}")
+
+            if avg_r2 > best_r2:
+                best_r2 = avg_r2
+                best_n_components = n_components
+                best_n_folds = n_folds
+                X_train_fold1 = X_train_fold
+                y_train_fold1 = y_train_fold
+                # Print information for each combination
+                print(f"Best n_components: {best_n_components}, Best n_folds: {best_n_folds}, Best R-squared: {best_r2:.4f}")
+
+
+
+######################
+
+# Train the PLSR model on the best combination of components
+best_pls = PLSRegression(n_components=best_n_components)
+best_pls.fit(X_train_fold1, y_train_fold1)
+y_pred = best_pls.predict(X_test)
+
+
+
+# Calculate RMSE and RPD
+rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+rpd = np.std(y_test) / rmse
+r2=r2_score(y_test, y_pred)
+
+
+from scipy.stats import scoreatpercentile
+Q3 = scoreatpercentile(y_test, 75)
+Q1 = scoreatpercentile(y_test, 25)
+
+# Calculate RPIQ using the formula
+RPIQ = (Q3 - Q1) / 14.48
+RPIQ
+
+
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    print(f"Test R-squared: {r2:.4f}")
+    print(f"CV R-squared: {best_r2:.4f}")
+    print(f"RMSE: {rmse:.4f}")
+    print(f"RPD: {rpd:.4f}")
+    print(f"RPIQ: {RPIQ:.4f}")
+    print(f"Best number of components: {best_n_components}")
+    print(f"Best number of folds: {best_n_folds}")
+
+
+
+################Plotting#########################
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Calculate the slope and intercept for the regression line
+slope, intercept = np.polyfit(y_test.flatten(), y_pred.flatten(), 1) 
+
+# Plotting
+plt.figure(figsize=(6, 6))
+plt.scatter(y_test, y_pred, marker='x', label='Test Predictions', alpha=0.7,)
+plt.plot(y_test, slope * y_test + intercept, color='orange', label='Regression Line')
+plt.plot(y_test, y_test, color='gray', linestyle='--')
+
+# Add annotations in the lower right corner
+plt.text(0.7, 0.35, f'R-squared: {r2:.2f}', fontsize=12, transform=plt.gca().transAxes)
+plt.text(0.7, 0.3, f'RMSE: {rmse:.2f}', fontsize=12, transform=plt.gca().transAxes)
+plt.text(0.7, 0.25, f'RPD: {rpd:.2f}', fontsize=12, transform=plt.gca().transAxes)
+
+plt.xlabel('Measured Nitrate Values', fontsize=14)
+plt.ylabel('Predicted Nitrate Values', fontsize=14)
+plt.title('Predicted vs Measured Nitrate', fontsize=14)
+plt.legend(loc='upper right')
+plt.show()
+
