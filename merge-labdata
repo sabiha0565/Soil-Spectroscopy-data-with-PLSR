@@ -1,0 +1,21 @@
+# This code merge the soil spectral data with laboratory data 
+
+
+import pandas as pd
+
+# File paths
+main_file_path = r"C:\Users\mrahman8\Desktop\SowPosture_DailySummary - Copy.csv"
+crate_file_path = r"C:\Users\mrahman8\Desktop\Crate_size_and_lamps_201812.csv"
+output_file_path = r"C:\Users\mrahman8\Desktop\merged_output.csv"
+
+# Read the CSV files
+main_df = pd.read_csv(main_file_path)
+crate_df = pd.read_csv(crate_file_path)
+
+# Merge the dataframes on X and Y  columns
+merged_df = pd.merge(main_df, crate_df, on=['', ''])# put column name(s) inside to match columns 
+
+# Save the merged dataframe to a new CSV file
+merged_df.to_csv(output_file_path, index=False)
+
+print(f"Merged file saved to: {output_file_path}")
